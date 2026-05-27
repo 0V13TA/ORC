@@ -15,14 +15,14 @@ export default class Observer {
 
   // --- 3D Vertical Physics Variables ---
   z: number = 0;
-  height: number = 20;
+  height: number = 40;
   protected velocityZ: number = 0;
   protected stepHeight: number = 10;
   protected jumpHeight: number = 320;
   protected gravityForce: number = -300;
 
   protected speed: number = 80;
-  protected radius: number = 2;
+  protected radius: number = 8;
   protected rotationSpeed: number = 140;
 
   constructor(position: Vector2D, fov: DEGREES) {

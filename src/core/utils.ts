@@ -147,9 +147,11 @@ export function checkCollisionCircleRec(
   return collision;
 }
 
+// In src/core/utils.ts
+
 export function circleLineCollision(
-  currentPos: Vector2D, // Pass where the player started this frame
-  targetPos: Vector2D, // Where they want to go
+  currentPos: Vector2D,
+  targetPos: Vector2D,
   radius: number,
   wallStart: Vector2D,
   wallEnd: Vector2D,
@@ -165,7 +167,7 @@ export function circleLineCollision(
 
   if (segmentLengthSq === 0) return Vector2.createVector(0, 0);
 
-  // 1. Project the TARGET position to find the closest point on the segment
+  // 1. Proximity Check: Find the closest point on the actual segment to the TARGET position
   let t = ((targetPos.x - x1) * dx + (targetPos.y - y1) * dy) / segmentLengthSq;
   t = Math.max(0, Math.min(1, t));
 
@@ -173,35 +175,48 @@ export function circleLineCollision(
   const offsets = Vector2.subtract(targetPos, closestPoint);
   const distance = Vector2.magnitude(offsets);
 
-  // 2. Derive the 2D surface normal line vector
-  const lineNormalX = -dy;
-  const lineNormalY = dx;
+  // 2. Tunneling Check: Strict line-segment intersection matching player step vs wall bounds
+  let crossedOver = false;
+  const denom =
+    (x1 - x2) * (currentPos.y - targetPos.y) -
+    (y1 - y2) * (currentPos.x - targetPos.x);
 
-  // 3. Determine which side of the line the player *started* on
-  const startOffset = Vector2.subtract(currentPos, closestPoint);
-  const startDot = startOffset.x * lineNormalX + startOffset.y * lineNormalY;
-  const pushSign = startDot >= 0 ? 1 : -1;
+  if (denom !== 0) {
+    const wallT =
+      ((x1 - currentPos.x) * (currentPos.y - targetPos.y) -
+        (y1 - currentPos.y) * (currentPos.x - targetPos.x)) /
+      denom;
+    const moveT =
+      ((x1 - x2) * (y1 - currentPos.y) - (y1 - y2) * (x1 - currentPos.x)) /
+      denom;
 
-  // 4. Determine if their intended step crossed over the wall boundary line completely
-  const targetOffset = Vector2.subtract(targetPos, closestPoint);
-  const targetDot = targetOffset.x * lineNormalX + targetOffset.y * lineNormalY;
-  const crossedOver =
-    (startDot > 0 && targetDot < 0) || (startDot < 0 && targetDot > 0);
+    // A valid breach ONLY occurs if the cross-over happens within the active bounds of BOTH segments
+    if (wallT >= 0 && wallT <= 1 && moveT >= 0 && moveT <= 1) {
+      crossedOver = true;
+    }
+  }
 
-  // 5. Resolve if inside radius or if they breached the barrier
+  // 3. Resolve displacement if within the boundary radius or if a true segment crossing occurred
   if (distance < radius || crossedOver) {
+    const lineNormalX = -dy;
+    const lineNormalY = dx;
     const normalMag = Math.sqrt(
       lineNormalX * lineNormalX + lineNormalY * lineNormalY,
     );
+
     if (normalMag === 0) return Vector2.createVector(0, 0);
 
-    // Normal vector facing back towards the inside/starting side
+    // Determine which side of the wall the player started on to find the correct push direction
+    const startOffset = Vector2.subtract(currentPos, closestPoint);
+    const startDot = startOffset.x * lineNormalX + startOffset.y * lineNormalY;
+    const pushSign = startDot >= 0 ? 1 : -1;
+
     const unitNormal = Vector2.createVector(
       (lineNormalX / normalMag) * pushSign,
       (lineNormalY / normalMag) * pushSign,
     );
 
-    // If they tunneled past, the depth penetration value is negative relative to the start side
+    // If they breached the barrier, adjust the depth penetration dynamically
     const signedDistance = crossedOver ? -distance : distance;
     const overlap = radius - signedDistance;
 

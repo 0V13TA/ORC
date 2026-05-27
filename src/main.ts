@@ -15,7 +15,7 @@ orc.onCreate(async (scene) => {
   // 1. Safely pull down your resource asset texture column allocations!
   let texture;
   try {
-    texture = await loadTexture("../public/assets/wood.png");
+    texture = await loadTexture("/assets/redbrick.png");
   } catch (e) {
     console.warn(
       "Could not find texture map asset, falling back onto solid colors.",
