@@ -23,7 +23,7 @@ export default class Observer {
   public viewDistance: number = 400;
 
   // --- 3D Vertical Physics Variables ---
-  protected z: number = 0;
+  z: number = 0;
   protected velocityZ: number = 0;
   protected height: number = 40;
   protected jumpHeight: number = 120;

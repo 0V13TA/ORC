@@ -5,14 +5,10 @@ import { Vector2, toRadians } from "./utils";
 export default class Scene {
   observer: Observer;
   sectors: Sector[];
-  screenWidth: number;
-  screenHeigth: number;
 
-  constructor(observer: Observer, screenWidth: number, screenHeight: number) {
+  constructor(observer: Observer) {
     this.sectors = [];
     this.observer = observer;
-    this.screenWidth = screenWidth;
-    this.screenHeigth = screenHeight;
   }
 
   createSector(floorHeight: number, ceilingHeight: number) {

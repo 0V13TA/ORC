@@ -1,34 +1,24 @@
-import Observer from "./observer";
-import "./style.css";
-import { createCanvas, Input, TimerManager, Vector2 } from "./utils";
+// src/main.ts
+import ORCEngine from "./ORC";
+import "./style.css"; // Ensures canvas absolute scaling rules wrap nicely
 
-const { canvas: minimapCanvas, ctx: minimapCtx } = createCanvas(200, 200);
-minimapCanvas.classList.add("minimap");
-const { canvas, ctx } = createCanvas(innerWidth * 0.99, innerHeight * 0.99);
-canvas.classList.add("mainCanvas");
+// Bootstrap ORC Engine core instances
+const orc = new ORCEngine({
+  width: innerWidth * 0.99,
+  height: innerHeight * 0.99,
 
-let lastTime = 0;
-let animationID: number;
+  container: document.body,
 
-const player = new Observer(
-  Vector2.createVector(minimapCanvas.width / 2, minimapCanvas.height / 2),
-  60,
-  minimapCanvas,
-);
+  enableMinimap: true,
+  minimapSize: { width: 200, height: 200 },
+});
 
-function animate(timestamp: number) {
-  if (!lastTime) lastTime = timestamp;
-  const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
-  lastTime = timestamp;
+// Kick off the master processing request loop!
+orc.start();
 
-  TimerManager.update(timestamp - (lastTime - dt * 1000));
-  minimapCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
-  player.draw(minimapCtx);
-  player.update(dt);
+// // Custom gameplay or tracking behaviors can hook in effortlessly:
+// orc.onUpdate((dt) => {
+//   // Developer can monitor game state ticks here without modifying core engine source files
+// });
 
-  Input.endFrame();
-  animationID = requestAnimationFrame(animate);
-}
-
-Input.init();
-animationID = requestAnimationFrame(animate);
+console.log("ORC Engine active and processing coordinates:", orc);
