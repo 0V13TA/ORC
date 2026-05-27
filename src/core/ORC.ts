@@ -167,16 +167,127 @@ export default class ORCEngine {
    * Coordinates pure rasterization loops and context clears
    */
   private render() {
-    // 1. Wipe the minimap view context clean
+    // 1. Wipe the minimap view context clean every frame
     this.mapCtx.clearRect(0, 0, this.mapCanvas.width, this.mapCanvas.height);
 
     // 2. Perform 3D projection column sweep and blit raw bytes onto the screen
     this.renderer3D.render(this.scene);
 
-    // 3. Render 2D debug lines onto the minimap if configured open
-    // if (this.config.enableMinimap && this.mapCanvas.style.display !== "none") {
-    //   this.observer.draw(this.mapCtx);
-    // }
+    // 3. Render the top-down 2D radar view if configured active
+    if (this.config.enableMinimap && this.mapCanvas.style.display !== "none") {
+      this.renderMinimap();
+    }
+  }
+
+  /**
+   * Generates a player-centric top-down radar overlay on the map canvas context
+   */
+  private renderMinimap() {
+    const ctx = this.mapCtx;
+    const obs = this.observer;
+    const canvasW = this.mapCanvas.width;
+    const canvasH = this.mapCanvas.height;
+
+    ctx.save();
+
+    // 1. Translate the viewport context to center on the player's position
+    ctx.translate(canvasW / 2, canvasH / 2);
+    ctx.translate(-obs.position.x, -obs.position.y);
+
+    // 2. Draw Sector Walls/Boundaries
+    if (obs.currentSector) {
+      for (const wall of obs.currentSector.boundaries) {
+        ctx.beginPath();
+        if (wall.isPortal) {
+          ctx.strokeStyle = "rgba(0, 150, 255, 0.5)"; // Translucent Blue Portal
+          ctx.lineWidth = 1.5;
+        } else {
+          ctx.strokeStyle = "#ffffff"; // Solid White Walls
+          ctx.lineWidth = 2.5;
+        }
+        ctx.moveTo(wall.start.x, wall.start.y);
+        ctx.lineTo(wall.end.x, wall.end.y);
+        ctx.stroke();
+      }
+    }
+
+    // 3. Draw Dynamic Wall-Bounded FOV Visibility Cone
+    const fovAngleStart = obs.dirAngle - obs.fov / 2;
+
+    // Choose how dense you want the vision sweep (60-90 rays is clean and fast)
+    const rayCount = 60;
+    const angleStep = obs.fov / rayCount;
+
+    ctx.beginPath();
+    ctx.moveTo(obs.position.x, obs.position.y); // Anchor origin point at player position
+
+    // Sweep across the FOV arc, casting rays and appending endpoints to the polygon
+    for (let i = 0; i <= rayCount; i++) {
+      const currentAngleDeg = fovAngleStart + i * angleStep;
+      const currentAngleRad = (currentAngleDeg * Math.PI) / 180;
+
+      // Leverage your scene's DDA/Cramer ray intercept finder
+      const rayHit = this.scene.castRay(currentAngleRad);
+
+      if (rayHit) {
+        // Stop line exactly at the collision point coordinate
+        ctx.lineTo(rayHit.point.x, rayHit.point.y);
+      } else {
+        // If a ray escapes map boundaries, clip it to maximum viewing distance
+        ctx.lineTo(
+          obs.position.x + Math.cos(currentAngleRad) * obs.viewDistance,
+          obs.position.y + Math.sin(currentAngleRad) * obs.viewDistance,
+        );
+      }
+    }
+
+    ctx.closePath();
+    ctx.fillStyle = "rgba(0, 255, 204, 0.08)"; // Ultra-smooth faint green neon shadow cone
+    ctx.fill();
+
+    // OPTIONAL: Draw the clean bounding framing wires for that classic vector radar look
+    ctx.strokeStyle = "rgba(0, 255, 204, 0.25)";
+    ctx.lineWidth = 1;
+
+    // Left edge line trace
+    const leftRad = (fovAngleStart * Math.PI) / 180;
+    const leftHit = this.scene.castRay(leftRad);
+    ctx.beginPath();
+    ctx.moveTo(obs.position.x, obs.position.y);
+    ctx.lineTo(
+      leftHit
+        ? leftHit.point.x
+        : obs.position.x + Math.cos(leftRad) * obs.viewDistance,
+      leftHit
+        ? leftHit.point.y
+        : obs.position.y + Math.sin(leftRad) * obs.viewDistance,
+    );
+    ctx.stroke();
+
+    // Right edge line trace
+    const rightRad = ((fovAngleStart + obs.fov) * Math.PI) / 180;
+    const rightHit = this.scene.castRay(rightRad);
+    ctx.beginPath();
+    ctx.moveTo(obs.position.x, obs.position.y);
+    ctx.lineTo(
+      rightHit
+        ? rightHit.point.x
+        : obs.position.x + Math.cos(rightRad) * obs.viewDistance,
+      rightHit
+        ? rightHit.point.y
+        : obs.position.y + Math.sin(rightRad) * obs.viewDistance,
+    );
+    ctx.stroke();
+
+    // 4. Draw Player Position Node
+    ctx.beginPath();
+    ctx.arc(obs.position.x, obs.position.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = "#00ffcc";
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = "#00ffcc";
+    ctx.fill();
+
+    ctx.restore();
   }
 
   /**

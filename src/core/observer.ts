@@ -11,15 +11,15 @@ export default class Observer {
   currentSector?: Sector;
 
   // Public and fully configurable via engine scripts or power-ups
-  public viewDistance: number = 900;
+  public viewDistance: number = 400;
 
   // --- 3D Vertical Physics Variables ---
   z: number = 0;
-  height: number = 40;
+  height: number = 20;
   protected velocityZ: number = 0;
-  protected jumpHeight: number = 120;
-  protected gravityForce: number = -300;
   protected stepHeight: number = 10;
+  protected jumpHeight: number = 320;
+  protected gravityForce: number = -300;
 
   protected speed: number = 80;
   protected radius: number = 2;
@@ -33,31 +33,73 @@ export default class Observer {
     this.dirVector = Vector2.fromAngle(toRadians(this.dirAngle));
   }
 
-  /**
-   * OVERRIDABLE MOVE HOOK: Receives a raw intended 2D displacement vector delta,
-   * validates it against sector boundaries, and updates positioning.
-   */
+  public lookAt(angle: DEGREES) {
+    this.dirAngle = ((angle % 360) + 360) % 360;
+    this.dirVector = Vector2.normalized(
+      Vector2.fromAngle(toRadians(this.dirAngle)),
+    );
+  }
+
+  // In src/core/observer.ts
+
   public move(displacement: Vector2D): void {
     if (displacement.x === 0 && displacement.y === 0) return;
 
     // Project where the observer wants to step on this frame tick
     const intendedPosition: Vector2D = Vector2.add(this.position, displacement);
 
-    // Resolve boundaries and slide out cleanly
-    this.position = this.checkCollision(intendedPosition);
+    // Pass BOTH the original position and the intended position to prevent phasing
+    this.position = this.checkCollision(this.position, intendedPosition);
   }
 
-  /**
-   * OVERRIDABLE INPUT HOOK: Handles polling keyboard events and translating
-   * them into continuous movement displacement vectors.
-   */
+  public checkCollision(currentPos: Vector2D, targetPos: Vector2D): Vector2D {
+    let outputVector: Vector2D = { ...targetPos };
+    if (!this.currentSector) return outputVector;
+
+    // Run multiple iterations to resolve corner sliding nicely
+    for (let step = 0; step < 2; step++) {
+      for (const wall of this.currentSector.boundaries) {
+        const rebound = circleLineCollision(
+          currentPos,
+          outputVector,
+          this.radius,
+          wall.start,
+          wall.end,
+        );
+
+        // If an intersection displacement occurs
+        if (rebound.x !== 0 || rebound.y !== 0) {
+          if (wall.isPortal && wall.targetSector) {
+            const neighbor = wall.targetSector;
+
+            const floorDiff =
+              neighbor.floorHeight - this.currentSector.floorHeight;
+            const playerTop = this.z + this.height;
+            const ceilingObstructed = playerTop > neighbor.ceilingHeight;
+            const floorObstructed = floorDiff > this.stepHeight;
+            const gapTooSmall =
+              neighbor.ceilingHeight - neighbor.floorHeight < this.height;
+
+            if (!floorObstructed && !ceilingObstructed && !gapTooSmall) {
+              continue;
+            }
+          }
+
+          // Apply corrective push direction sliding adjustments
+          outputVector = Vector2.add(outputVector, rebound);
+        }
+      }
+    }
+    return outputVector;
+  }
+
   public handleInput(dt: number): void {
     // --- 1. HANDLE CAMERA VIEW ROTATION ---
     if (Input.isHeld("ArrowLeft")) {
-      this.dirAngle -= this.rotationSpeed * dt; // Turn left (degrees per second)
+      this.dirAngle -= this.rotationSpeed * dt;
     }
     if (Input.isHeld("ArrowRight")) {
-      this.dirAngle += this.rotationSpeed * dt; // Turn right
+      this.dirAngle += this.rotationSpeed * dt;
     }
     this.lookAt(this.dirAngle);
 
@@ -71,22 +113,20 @@ export default class Observer {
       moveVector = Vector2.subtract(moveVector, this.dirVector);
     }
 
-    if (Input.isHeld("KeyA")) {
-      moveVector.x += this.dirVector.y;
-      moveVector.y += this.dirVector.x;
-    }
+    // Fixed Perpendicular Strafe Vector Maps
     if (Input.isHeld("KeyD")) {
       moveVector.x -= this.dirVector.y;
+      moveVector.y += this.dirVector.x;
+    }
+    if (Input.isHeld("KeyA")) {
+      moveVector.x += this.dirVector.y;
       moveVector.y -= this.dirVector.x;
     }
 
     // --- 3. EXECUTE MOVEMENT VECTOR DISPLACEMENT ---
     if (moveVector.x !== 0 || moveVector.y !== 0) {
-      // Normalize combined inputs to prevent diagonal movement speed boosts
       const moveNorm = Vector2.normalized(moveVector);
       const displacement = Vector2.scale(moveNorm, this.speed * dt);
-
-      // Pass the fully computed step vector directly to the move handler
       this.move(displacement);
     }
 
@@ -97,58 +137,8 @@ export default class Observer {
       this.z === this.currentSector.floorHeight
     ) {
       this.velocityZ = this.jumpHeight;
-      this.z += 1; // Nudge off the floor
+      this.z += 1;
     }
-  }
-
-  public checkCollision(targetPos: Vector2D) {
-    let outputVector: Vector2D = { ...targetPos };
-    if (!this.currentSector) return outputVector;
-
-    // Run multiple iterations to resolve corner sliding nicely
-    for (let step = 0; step < 2; step++) {
-      for (const wall of this.currentSector.boundaries) {
-        // Pass primitive vectors directly instead of Circle/Line objects
-        const rebound = circleLineCollision(
-          outputVector,
-          this.radius,
-          wall.start,
-          wall.end,
-        );
-
-        // If an intersection displacement occurs
-        if (rebound.x !== 0 || rebound.y !== 0) {
-          // If the obstacle is an open portal door frame, check vertical space conditions
-          if (wall.isPortal && wall.targetSector) {
-            const neighbor = wall.targetSector;
-
-            const floorDiff =
-              neighbor.floorHeight - this.currentSector.floorHeight;
-            const playerTop = this.z + this.height;
-            const ceilingObstructed = playerTop > neighbor.ceilingHeight;
-            const floorObstructed = floorDiff > this.stepHeight;
-            const gapTooSmall =
-              neighbor.ceilingHeight - neighbor.floorHeight < this.height;
-
-            if (!floorObstructed && !ceilingObstructed && !gapTooSmall) {
-              // The opening is totally clear vertically—let the observer step across without bouncing!
-              continue;
-            }
-          }
-
-          // Apply corrective push direction sliding adjustments
-          outputVector = Vector2.add(outputVector, rebound);
-        }
-      }
-    }
-    return outputVector;
-  }
-
-  public lookAt(angle: DEGREES) {
-    this.dirAngle = ((angle % 360) + 360) % 360;
-    this.dirVector = Vector2.normalized(
-      Vector2.fromAngle(toRadians(this.dirAngle)),
-    );
   }
 
   public update(dt: number) {

@@ -22,8 +22,12 @@ canvas {
 
 canvas.minimap {
   margin: 0;
-  top: 10px;
-  left: 10px;
+  top: 15px;
+  left: 15px;
   z-index: 9999;
   position: fixed;
+  border: 1px solid rgba(0, 255, 204, 0.3);
+  border-radius: 8px;
+  background-color: rgba(10, 10, 10, 0.75); /* Translucent HUD backdrop */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
 }

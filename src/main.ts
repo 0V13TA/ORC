@@ -15,7 +15,7 @@ orc.onCreate(async (scene) => {
   // 1. Safely pull down your resource asset texture column allocations!
   let texture;
   try {
-    texture = await loadTexture("../public/assets/greystone.png");
+    texture = await loadTexture("../public/assets/wood.png");
   } catch (e) {
     console.warn(
       "Could not find texture map asset, falling back onto solid colors.",
@@ -32,7 +32,7 @@ orc.onCreate(async (scene) => {
 
   const solidBlueMaterial: Material = {
     type: "WALL",
-    // solidColor: createColor(150, 220, 240),
+    solidColor: createColor(50, 120, 240),
   };
 
   // Helper macro to draw walls rapidly
