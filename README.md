@@ -1,4 +1,4 @@
-# Free-Form Pseudo-3d Ray-Casting Engine
+# Free-Form Pseudo-3d Ray-Casting Engine (ORC)
 
 ## Parts of the system
 
@@ -19,3 +19,6 @@ For rendering textures I plan on doing something like this
  0. repeat the textures (This doesn't have to be actual repetition,  
  you can simply take a modulo and begin rendering again)  
  0. instead of drawing a line, draw a column of the texture.
+O - OVIETA
+R - RAY
+C - CASTER
