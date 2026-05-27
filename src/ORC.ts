@@ -73,7 +73,6 @@ export default class ORCEngine {
     this.observer = new Observer(
       Vector2.createVector(startX, startY),
       60, // Field of view (Degrees)
-      this.mapCanvas, // Frame constraint asset reference
     );
 
     // Instantiate your single-ray Scene manager
@@ -152,9 +151,9 @@ export default class ORCEngine {
     this.renderer3D.render(this.scene);
 
     // 3. Render 2D debug lines onto the minimap if configured open
-    if (this.config.enableMinimap && this.mapCanvas.style.display !== "none") {
-      this.observer.draw(this.mapCtx);
-    }
+    // if (this.config.enableMinimap && this.mapCanvas.style.display !== "none") {
+    //   this.observer.draw(this.mapCtx);
+    // }
   }
 
   /**

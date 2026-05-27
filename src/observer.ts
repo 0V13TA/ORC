@@ -1,14 +1,5 @@
-import type { contextType, DEGREES, Material, Sector, Vector2D } from "./Types";
-import {
-  circleLineCollision,
-  Colors,
-  createColor,
-  drawLine,
-  Input,
-  populate,
-  toRadians,
-  Vector2,
-} from "./utils";
+import type { DEGREES, Sector, Vector2D } from "./Types";
+import { circleLineCollision, Input, toRadians, Vector2 } from "./utils";
 
 export default class Observer {
   fov: DEGREES;
@@ -34,24 +25,12 @@ export default class Observer {
   protected radius: number = 2;
   protected rotationSpeed: number = 140;
 
-  constructor(position: Vector2D, fov: DEGREES, canvas: HTMLCanvasElement) {
+  constructor(position: Vector2D, fov: DEGREES) {
     this.fov = fov;
     this.position = position;
 
     this.dirAngle = 0;
     this.dirVector = Vector2.fromAngle(toRadians(this.dirAngle));
-
-    this.currentSector = { ceilingHeight: 0, floorHeight: 0, boundaries: [] };
-    const material: Material = {
-      type: "WALL",
-      solidColor: createColor(255, 100, 200),
-    };
-    populate(
-      this.currentSector.boundaries,
-      material,
-      canvas.width,
-      canvas.height,
-    );
   }
 
   /**
@@ -204,35 +183,6 @@ export default class Observer {
         this.z = this.currentSector.ceilingHeight - this.height;
         this.velocityZ = 0; // Bonk head, lose vertical momentum
       }
-    }
-  }
-
-  public draw(ctx: contextType) {
-    // Draw arrow pointing in direction
-    drawLine(
-      this.position,
-      Vector2.add(this.position, Vector2.scale(this.dirVector, 16)),
-      1,
-      Colors.white,
-      ctx,
-    );
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.fillStyle = "#fff";
-    ctx.arc(this.position.x, this.position.y, this.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    if (!this.currentSector) return;
-    for (const wall of this.currentSector.boundaries) {
-      drawLine(
-        wall.start,
-        wall.end,
-        2,
-        wall.material.solidColor || Colors.white,
-        ctx,
-      );
     }
   }
 }
