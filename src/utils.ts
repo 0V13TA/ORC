@@ -7,6 +7,7 @@ import {
   type KeyCode,
   type Material,
   type RADIANS,
+  type Sector,
   type Texture,
   type Vector2D,
 } from "./Types";
@@ -212,13 +213,13 @@ export function drawLine(
   start: Vector2D,
   end: Vector2D,
   width: number,
-  color: string,
+  color: Color,
   ctx: contextType,
 ) {
   ctx.save();
   ctx.beginPath();
   ctx.lineWidth = width;
-  ctx.strokeStyle = color;
+  ctx.strokeStyle = color.css;
   ctx.moveTo(start.x, start.y);
   ctx.lineTo(end.x, end.y);
   ctx.stroke();
@@ -289,39 +290,36 @@ export function loadTexture(src: string): Promise<Texture> {
 }
 
 // --- Miscellaneous --
-export const Colors = {
-  red: (alpha: number = 1): string => colorToRGBA([255, 0, 0, alpha]),
-  green: (alpha: number = 1): string => colorToRGBA([0, 255, 0, alpha]),
-  blue: (alpha: number = 1): string => colorToRGBA([0, 0, 255, alpha]),
-  white: (alpha: number = 1): string => colorToRGBA([255, 255, 255, alpha]),
-  black: (alpha: number = 1): string => colorToRGBA([0, 0, 0, alpha]),
+export function createColor(
+  r: number,
+  g: number,
+  b: number,
+  a: number = 255,
+): Color {
+  // Clamp values only once during creation
+  const clamp = (val: number) => Math.max(0, Math.min(255, Math.round(val)));
+  const clR = clamp(r);
+  const clG = clamp(g);
+  const clB = clamp(b);
+  const clA = clamp(a);
 
-  // Custom color creator
-  custom: (r: number, g: number, b: number, a: number = 1): string =>
-    colorToRGBA([r, g, b, a]),
-};
-
-// Version with opacity support (0-255 or 0-1)
-export function colorToRGBA(
-  color: Color,
-  normalizeAlpha: boolean = true,
-): string {
-  let [r, g, b, a] = color;
-
-  // Clamp RGB
-  r = Math.min(255, Math.max(0, Math.round(r)));
-  g = Math.min(255, Math.max(0, Math.round(g)));
-  b = Math.min(255, Math.max(0, Math.round(b)));
-
-  // Handle alpha normalization
-  if (normalizeAlpha && a > 1) {
-    // If alpha > 1, assume it's 0-255 range, convert to 0-1
-    a = a / 255;
-  }
-  a = Math.min(1, Math.max(0, a));
-
-  return `rgba(${r}, ${g}, ${b}, ${a})`;
+  return {
+    r: clR,
+    g: clG,
+    b: clB,
+    a: clA,
+    css: `rgba(${clR}, ${clG}, ${clB}, ${clA / 255})`,
+  };
 }
+
+// Pre-compute constants so they never allocate memory during the render loop
+export const Colors = {
+  red: createColor(255, 0, 0),
+  green: createColor(0, 255, 0),
+  blue: createColor(0, 0, 255),
+  white: createColor(255, 255, 255),
+  black: createColor(0, 0, 0),
+};
 
 // Returns 2 points relative to
 // the width and height
@@ -391,9 +389,38 @@ export function populate(
   createWall(p(0.17, 0.7), p(0.2, 0.7), pillarsMat, boundaries);
 }
 
+export function linkSectorsViaPortal(
+  sectorA: Sector,
+  sectorB: Sector,
+  start: Vector2D,
+  end: Vector2D,
+  material: Material,
+) {
+  const boundA: Boundary = {
+    start,
+    end,
+    material,
+    isPortal: true,
+    targetSector: sectorB,
+  };
+  const boundB: Boundary = {
+    start,
+    end,
+    material,
+    isPortal: true,
+    targetSector: sectorA,
+  };
+
+  boundA.portalTo = boundB;
+  boundB.portalTo = boundA;
+
+  sectorA.boundaries.push(boundA);
+  sectorB.boundaries.push(boundB);
+}
+
 // --- Vectors ---
 export class Vector2 {
-  static createVector(x: number, y: number): Vector2D {
+  static createVector(x: number = 0, y: number = 0): Vector2D {
     return { x, y };
   }
 
@@ -534,5 +561,9 @@ export class Vector2 {
     bounds: number = 0.00001,
   ): boolean {
     return Math.abs(v1.x - v2.x) <= bounds && Math.abs(v1.y - v2.y) <= bounds;
+  }
+
+  static isZero(v: Vector2D) {
+    return v.x === 0 && v.y === 0;
   }
 }

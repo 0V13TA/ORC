@@ -135,7 +135,13 @@ export type DEGREES = number;
 export type RADIANS = number;
 export type contextType = CanvasRenderingContext2D;
 
-export type Color = [r: number, g: number, b: number, a: number];
+export type Color = {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+  css: string; // Cached string for Canvas2D operations
+};
 
 export interface BoxEntity {
   x: number;
@@ -162,6 +168,7 @@ export type Boundary = {
   material: Material;
 
   isPortal: boolean;
+  targetSector?: Sector;
 
   // NOTE: points to another boundary
   // to portal to, if is portal is set
@@ -189,7 +196,7 @@ export type Texture = {
 
 export type MaterialType = "FLOOR" | "CEILING" | "WALL";
 export type Material = {
-  solidColor?: string;
+  solidColor?: Color;
 
   tint?: string;
   texture?: Texture;
@@ -199,3 +206,11 @@ export type Material = {
 
   opacity?: number; //NOTE: Will be implemented later not now
 };
+
+export interface EngineConfig {
+  width: number;
+  height: number;
+  container: HTMLElement;
+  enableMinimap: boolean;
+  minimapSize?: { width: number; height: number };
+}
