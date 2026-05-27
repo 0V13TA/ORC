@@ -15,7 +15,7 @@ orc.onCreate(async (scene) => {
   // 1. Safely pull down your resource asset texture column allocations!
   let texture;
   try {
-    texture = await loadTexture("/assets/redbrick.png");
+    texture = await loadTexture("/assets/colorstone.png");
   } catch (e) {
     console.warn(
       "Could not find texture map asset, falling back onto solid colors.",
@@ -68,6 +68,38 @@ orc.onCreate(async (scene) => {
   // Move the observer focus position directly into the heart of our new sector layout!
   scene.observer.position = Vector2.createVector(40, 40);
   scene.observer.lookAt(45); // Point looking towards the center pillar
+
+  // --- ADD MULTIPLE LIGHT SOURCES ---
+
+  // 1. A soft glowing amber torch hanging low near the player spawning point
+  // scene.addLight({
+  //   id: "spawn_torch",
+  //   position: Vector2.createVector(35, 35),
+  //   z: 10, // Close to floor height
+  //   radius: 90,
+  //   intensity: 2.2,
+  //   color: { r: 255, g: 160, b: 60 }, // Warm Amber Glow
+  // });
+
+  // 2. A vibrant neon-green light source sitting high near the top right ceiling corner
+  // scene.addLight({
+  //   id: "corner_beacon",
+  //   position: Vector2.createVector(170, 30),
+  //   z: 20, // High up near the ceiling line
+  //   radius: 1600,
+  //   intensity: 2.5,
+  //   color: { r: 0, g: 255, b: 120 }, // Radioactive Cyberpunk Green
+  // });
+
+  // 3. A localized deep blue light sitting inside the central structural pillar area
+  scene.addLight({
+    id: "monolith_glow",
+    position: Vector2.createVector(110, 110),
+    z: 30, // Mid-height eye level position
+    radius: 1200,
+    intensity: 1.0,
+    color: { r: 250, g: 220, b: 225 }, // Electric Sapphire Blue
+  });
 });
 
 // Kick off the master processing loop safely!

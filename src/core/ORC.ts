@@ -1,7 +1,7 @@
 import Observer from "./observer";
 import Scene from "./scene";
 import Renderer from "./renderer";
-import { Vector2, createCanvas, Input } from "./utils";
+import { Vector2, createCanvas, Input, toRadians } from "./utils";
 import type { EngineConfig } from "./Types";
 
 export default class ORCEngine {
@@ -224,7 +224,7 @@ export default class ORCEngine {
     // Sweep across the FOV arc, casting rays and appending endpoints to the polygon
     for (let i = 0; i <= rayCount; i++) {
       const currentAngleDeg = fovAngleStart + i * angleStep;
-      const currentAngleRad = (currentAngleDeg * Math.PI) / 180;
+      const currentAngleRad = toRadians(currentAngleDeg);
 
       // Leverage your scene's DDA/Cramer ray intercept finder
       const rayHit = this.scene.castRay(currentAngleRad);

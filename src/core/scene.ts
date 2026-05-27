@@ -1,14 +1,23 @@
 import type Observer from "./observer";
-import type { Boundary, RayHit, Sector, Vector2D } from "./Types";
+import type { Boundary, LightSource, RayHit, Sector, Vector2D } from "./Types";
 import { Vector2 } from "./utils";
 
 export default class Scene {
   observer: Observer;
   sectors: Sector[];
+  lights: LightSource[] = [];
 
   constructor(observer: Observer) {
     this.sectors = [];
     this.observer = observer;
+  }
+
+  addLight(light: LightSource): void {
+    this.lights.push(light);
+  }
+
+  removeLight(id: string): void {
+    this.lights = this.lights.filter((l) => l.id !== id);
   }
 
   createSector(floorHeight: number, ceilingHeight: number) {

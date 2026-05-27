@@ -194,7 +194,7 @@ export type Texture = {
   pixelColumns: Uint8ClampedArray[][];
 };
 
-export type MaterialType = "FLOOR" | "CEILING" | "WALL";
+type MaterialType = "FLOOR" | "CEILING" | "WALL";
 export type Material = {
   solidColor?: Color;
 
@@ -207,10 +207,19 @@ export type Material = {
   opacity?: number; //NOTE: Will be implemented later not now
 };
 
-export interface EngineConfig {
+export type EngineConfig = {
   width: number;
   height: number;
   container: HTMLElement;
   enableMinimap: boolean;
   minimapSize?: { width: number; height: number };
-}
+};
+
+export type LightSource = {
+  id: string;
+  position: Vector2D; // 2D World Coordinates (X, Y)
+  z: number; // Absolute World Elevation Height (Z)
+  radius: number; // Total distance drop-off threshold
+  intensity: number; // Brightness modifier scale (e.g., 1.0)
+  color: { r: number; g: number; b: number };
+};

@@ -38,7 +38,7 @@ export default class Renderer {
     const observer = scene.observer;
 
     this.pixelBuffer.fill(0xff000000); // Clear to opaque black
-    this.depthBuffer.fill(Infinity); // Reset depth buffer for this frame
+    this.depthBuffer.fill(Infinity);
 
     const centerAngle = toRadians(observer.dirAngle);
     const halfFOV = toRadians(observer.fov / 2);
@@ -82,48 +82,36 @@ export default class Renderer {
       const material = rayHit.boundary.material;
       const wallScreenHeight = floorScreenY - ceilingScreenY;
 
-      // =======================================================================
-      // --- PER-COLUMN LIGHTING CALCULATIONS ---
-      // =======================================================================
-
-      // 1. Distance Fog (Diminishes light farther away)
-      const distanceFactor = Math.max(
-        0,
-        Math.min(1, correctedDistance / observer.viewDistance),
-      );
-      const fogFactor = 1 - distanceFactor;
-
-      // 2. Directional Face Shading (Differentiates wall directions)
       const normal = this.getBoundaryNormal(
         rayHit.boundary.start,
         rayHit.boundary.end,
       );
-      // Dot alignment against global East/West vector creates contrast between intersecting walls
-      const wallAlignment = Math.abs(
-        Vector2.dot(Vector2.createVector(1, 0), normal),
+
+      // --- OPTIMIZATION STEP: 2D Spatial Light Culling Pass ---
+      // Filter out light resources that are too far away to impact this 2D boundary column location
+      const audibleLights = [];
+      for (const light of scene.lights) {
+        const dx = light.position.x - rayHit.point.x;
+        const dy = light.position.y - rayHit.point.y;
+        const distance2DSq = dx * dx + dy * dy;
+
+        if (distance2DSq < light.radius * light.radius) {
+          audibleLights.push({ light, dx, dy, distance2DSq });
+        }
+      }
+
+      // Calculate distance fog scalar once per column context
+      const fogFactor = Math.max(
+        0,
+        Math.min(1, correctedDistance / observer.viewDistance),
       );
-      const directionalShade = 0.75 + wallAlignment * 0.25; // Scales between 75% and 100% brightness
-
-      // 3. Horizontal Ambient Occlusion (Darkens room corners where segments meet)
-      const edgeDistanceH = Math.min(rayHit.u, 1 - rayHit.u);
-      const cornerThresholdH = 0.1; // Darkens the outer 10% of any wall length
-      const horizontalCornerShade =
-        edgeDistanceH < cornerThresholdH
-          ? 0.45 + 0.55 * (edgeDistanceH / cornerThresholdH) // Smooth linear scaling down to 45% brightness
-          : 1.0;
-
-      // Combine column-wide scalars into a master intensity factor
-      const columnLightMultiplier =
-        fogFactor * directionalShade * horizontalCornerShade;
 
       // Run exactly ONE loop to paint this specific wall vertical strip
       for (let y = wallTop; y <= wallBottom; y++) {
-        let r = 0,
-          g = 255,
-          b = 204,
-          a = 255; // Default neon fallback
-
-        const yOffset = y - ceilingScreenY;
+        let baseR = 0,
+          baseG = 255,
+          baseB = 204,
+          a = 255;
 
         if (material.texture) {
           const tex = material.texture;
@@ -131,39 +119,69 @@ export default class Renderer {
           const texX = Math.floor((rayHit.u * repeatX * tex.width) % tex.width);
           const textureColumn = tex.pixelColumns[texX];
 
+          const yOffset = y - ceilingScreenY;
           let texY = Math.floor((yOffset / wallScreenHeight) * tex.height);
           texY = Math.max(0, Math.min(tex.height - 1, texY));
 
-          r = textureColumn[texY][0];
-          g = textureColumn[texY][1];
-          b = textureColumn[texY][2];
+          baseR = textureColumn[texY][0];
+          baseG = textureColumn[texY][1];
+          baseB = textureColumn[texY][2];
           a = textureColumn[texY][3];
         } else if (material.solidColor) {
-          r = material.solidColor.r;
-          g = material.solidColor.g;
-          b = material.solidColor.b;
+          baseR = material.solidColor.r;
+          baseG = material.solidColor.g;
+          baseB = material.solidColor.b;
           a = material.solidColor.a;
         }
 
-        // =======================================================================
-        // --- PER-PIXEL LIGHTING CALCULATIONS ---
-        // =======================================================================
+        // --- 3D REVERSE-PROJECTION AND COUPLING PASS ---
+        // Deduce the exact absolute world elevation height (Z) of this precise pixel slice
+        const relativeZ =
+          ((screenYCenter - y) * correctedDistance) / projectionDistance;
+        const pixelWorldZ = relativeZ + eyeZ;
 
-        // 4. Vertical Ambient Occlusion (Darkens seams near floors and ceilings)
-        const verticalV = yOffset / wallScreenHeight; // Normalized vertical texture position (0.0 to 1.0)
-        const edgeDistanceV = Math.min(verticalV, 1 - verticalV);
-        const cornerThresholdV = 0.15; // Darkens within 15% of the wall top/bottom limits
-        const verticalCornerShade =
-          edgeDistanceV < cornerThresholdV
-            ? 0.6 + 0.4 * (edgeDistanceV / cornerThresholdV) // Scales down to 60% brightness
-            : 1.0;
+        // Establish uniform ambient baseline light constants (so unlit corners remain visible)
+        let litR = 0.08;
+        let litG = 0.08;
+        let litB = 0.08;
 
-        // Apply final consolidated scalar combinations cleanly to the RGB color channels
-        const finalLight = columnLightMultiplier * verticalCornerShade;
+        // Accumulate radiance vectors from all cull-approved lights
+        for (const active of audibleLights) {
+          const light = active.light;
 
-        r = Math.round(r * finalLight);
-        g = Math.round(g * finalLight);
-        b = Math.round(b * finalLight);
+          // Complete the 3D distance component vector using the pixel's height
+          const dz = light.z - pixelWorldZ;
+          const distance3D = Math.sqrt(active.distance2DSq + dz * dz);
+
+          if (distance3D >= light.radius) continue;
+
+          // Inverse linear light fall-off curve
+          const attenuation =
+            (1.0 - distance3D / light.radius) * light.intensity;
+
+          // Create normalized vector components pointing directly from the wall toward the light node
+          const distance2D = Math.sqrt(active.distance2DSq) || 1;
+          const lightDirX = active.dx / distance2D;
+          const lightDirY = active.dy / distance2D;
+
+          // Lambertian cosine alignment against the surface face normal line
+          // Math.abs ensures it maps evenly to whichever interior side of the segment is visible
+          const dotFactor = Math.abs(
+            normal.x * lightDirX + normal.y * lightDirY,
+          );
+
+          // Add the light color multiplied by its computed scalar intensity
+          const totalScalar = dotFactor * attenuation;
+          litR += (light.color.r / 255) * totalScalar;
+          litG += (light.color.g / 255) * totalScalar;
+          litB += (light.color.b / 255) * totalScalar;
+        }
+
+        // Apply global environmental atmosphere distance fog drop-off over the accumulated light
+        const visibility = 1.0 - fogFactor;
+        const r = Math.min(255, Math.round(baseR * litR * visibility));
+        const g = Math.min(255, Math.round(baseG * litG * visibility));
+        const b = Math.min(255, Math.round(baseB * litB * visibility));
 
         // Pack components cleanly into ABGR format for little-endian Uint32 operations
         const packedColor = (a << 24) | (b << 16) | (g << 8) | r;
