@@ -1,4 +1,3 @@
-// src/engine.ts
 import Observer from "./observer";
 import Scene from "./scene";
 import Renderer from "./renderer";
@@ -25,6 +24,8 @@ export default class ORCEngine {
 
   // Optional Developer Update Hook
   private localUpdateHook: ((dt: number) => void) | null = null;
+  private localCreateHook: ((scene: Scene) => void | Promise<void>) | null =
+    null;
 
   constructor(config: EngineConfig) {
     this.config = config;
@@ -92,8 +93,30 @@ export default class ORCEngine {
   /**
    * Starts execution of the master frame heartbeat
    */
-  public start() {
+  public async start() {
     if (this.isRunning) return;
+
+    // 1. If the user provided a creation hook, execute it and await its termination
+    if (this.localCreateHook) {
+      try {
+        await this.localCreateHook(this.scene);
+      } catch (error) {
+        console.error(
+          "ORC Engine failed during developer initialization sequence:",
+          error,
+        );
+        return;
+      }
+    }
+
+    // 2. Automatically map the initial spawning sector enclosure context onto the observer!
+    if (!this.observer.currentSector && this.scene.sectors.length > 0) {
+      // Look up where the observer dropped or fallback to the first active map sector room entry
+      this.observer.currentSector =
+        this.scene.getSectorAtPosition(this.observer.position) ||
+        this.scene.sectors[0];
+    }
+
     this.isRunning = true;
     this.lastTime = performance.now();
     requestAnimationFrame((timestamp) => this.loop(timestamp));
@@ -169,5 +192,12 @@ export default class ORCEngine {
    */
   public onUpdate(callback: (dt: number) => void) {
     this.localUpdateHook = callback;
+  }
+
+  /**
+   * An exposed callback engine registry for custom initialization
+   */
+  public onCreate(callback: (scene: Scene) => void | Promise<void>) {
+    this.localCreateHook = callback;
   }
 }

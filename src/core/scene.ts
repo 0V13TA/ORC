@@ -1,6 +1,6 @@
 import type Observer from "./observer";
 import type { Boundary, RayHit, Sector, Vector2D } from "./Types";
-import { Vector2, toRadians } from "./utils";
+import { Vector2 } from "./utils";
 
 export default class Scene {
   observer: Observer;
@@ -27,9 +27,6 @@ export default class Scene {
 
     let rayHit: RayHit | null = null;
     const rayStart = this.observer.position;
-
-    // Convert observer forward angle to radians
-    const centerAngle = toRadians(this.observer.dirAngle);
 
     // Generate a unit direction vector for this specific column ray
     const rayDir = Vector2.fromAngle(currentRayAngle);
@@ -67,17 +64,13 @@ export default class Scene {
         if (u < recordDistance) {
           recordDistance = u;
 
-          // Correct for fish-eye lens distortion effect
-          const beta = currentRayAngle - centerAngle;
-          const correctedDistance = u * Math.cos(beta);
-
           const hitPoint = Vector2.createVector(px + u * dx, py + u * dy);
           const wallLength = Vector2.distance(wall.start, wall.end);
           const hitOffset = Vector2.distance(wall.start, hitPoint);
 
           closestHit = {
             boundary: wall,
-            distance: correctedDistance, // Store corrected distance for clean render proportions
+            distance: u, // Store corrected distance for clean render proportions
             point: hitPoint,
             u: wallLength === 0 ? 0 : hitOffset / wallLength, // Normalize texture coordinate mapping
           };

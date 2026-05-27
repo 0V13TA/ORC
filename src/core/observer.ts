@@ -11,12 +11,12 @@ export default class Observer {
   currentSector?: Sector;
 
   // Public and fully configurable via engine scripts or power-ups
-  public viewDistance: number = 400;
+  public viewDistance: number = 900;
 
   // --- 3D Vertical Physics Variables ---
   z: number = 0;
+  height: number = 40;
   protected velocityZ: number = 0;
-  protected height: number = 40;
   protected jumpHeight: number = 120;
   protected gravityForce: number = -300;
   protected stepHeight: number = 10;

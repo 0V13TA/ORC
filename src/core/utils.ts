@@ -148,7 +148,8 @@ export function checkCollisionCircleRec(
 }
 
 export function circleLineCollision(
-  playerPos: Vector2D,
+  currentPos: Vector2D, // Pass where the player started this frame
+  targetPos: Vector2D, // Where they want to go
   radius: number,
   wallStart: Vector2D,
   wallEnd: Vector2D,
@@ -157,41 +158,56 @@ export function circleLineCollision(
   const y1 = wallStart.y;
   const x2 = wallEnd.x;
   const y2 = wallEnd.y;
-  const px = playerPos.x;
-  const py = playerPos.y;
 
   const dx = x2 - x1;
   const dy = y2 - y1;
   const segmentLengthSq = dx * dx + dy * dy;
 
-  // Line is a single point, no displacement needed
   if (segmentLengthSq === 0) return Vector2.createVector(0, 0);
 
-  // Project player position onto the line segment to find the closest point
-  let t = ((px - x1) * dx + (py - y1) * dy) / segmentLengthSq;
-  t = Math.max(0, Math.min(1, t)); // Clamp to stay strictly on the line segment
+  // 1. Project the TARGET position to find the closest point on the segment
+  let t = ((targetPos.x - x1) * dx + (targetPos.y - y1) * dy) / segmentLengthSq;
+  t = Math.max(0, Math.min(1, t));
 
   const closestPoint = Vector2.createVector(x1 + t * dx, y1 + t * dy);
-  const offsets = Vector2.subtract(playerPos, closestPoint);
+  const offsets = Vector2.subtract(targetPos, closestPoint);
   const distance = Vector2.magnitude(offsets);
 
-  // If the distance to the wall is less than the player's radius, resolve it
-  if (distance < radius) {
-    const overlap = radius - distance;
+  // 2. Derive the 2D surface normal line vector
+  const lineNormalX = -dy;
+  const lineNormalY = dx;
 
-    // Handle corner edge case where distance is zero to avoid division by zero
-    if (distance === 0) {
-      return Vector2.createVector(0, 0);
-    }
+  // 3. Determine which side of the line the player *started* on
+  const startOffset = Vector2.subtract(currentPos, closestPoint);
+  const startDot = startOffset.x * lineNormalX + startOffset.y * lineNormalY;
+  const pushSign = startDot >= 0 ? 1 : -1;
 
-    const pushDirection = Vector2.createVector(
-      offsets.x / distance,
-      offsets.y / distance,
+  // 4. Determine if their intended step crossed over the wall boundary line completely
+  const targetOffset = Vector2.subtract(targetPos, closestPoint);
+  const targetDot = targetOffset.x * lineNormalX + targetOffset.y * lineNormalY;
+  const crossedOver =
+    (startDot > 0 && targetDot < 0) || (startDot < 0 && targetDot > 0);
+
+  // 5. Resolve if inside radius or if they breached the barrier
+  if (distance < radius || crossedOver) {
+    const normalMag = Math.sqrt(
+      lineNormalX * lineNormalX + lineNormalY * lineNormalY,
     );
-    return Vector2.scale(pushDirection, overlap); // Return displacement delta
+    if (normalMag === 0) return Vector2.createVector(0, 0);
+
+    // Normal vector facing back towards the inside/starting side
+    const unitNormal = Vector2.createVector(
+      (lineNormalX / normalMag) * pushSign,
+      (lineNormalY / normalMag) * pushSign,
+    );
+
+    // If they tunneled past, the depth penetration value is negative relative to the start side
+    const signedDistance = crossedOver ? -distance : distance;
+    const overlap = radius - signedDistance;
+
+    return Vector2.scale(unitNormal, overlap);
   }
 
-  // Return zero vector if no collision occurs
   return Vector2.createVector(0, 0);
 }
 
