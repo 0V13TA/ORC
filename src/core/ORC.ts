@@ -23,7 +23,8 @@ export default class ORCEngine {
   private config: EngineConfig;
 
   // Optional Developer Update Hook
-  private localUpdateHook: ((dt: number) => void) | null = null;
+  private localUpdateHook: ((dt: number, input: typeof Input) => void) | null =
+    null;
   private localCreateHook: ((scene: Scene) => void | Promise<void>) | null =
     null;
 
@@ -150,30 +151,26 @@ export default class ORCEngine {
     requestAnimationFrame((timestamp) => this.loop(timestamp));
   }
 
-  /**
-   * Drives mathematical state updates across all linked engine components
-   */
   private update(dt: number) {
-    // Update the position, angle vector, and vertical gravity physics
     this.observer.update(dt);
 
-    // Execute user-defined gameplay logic rules if hooked into the runtime
+    const trackingSector = this.scene.getSectorAtPosition(
+      this.observer.position,
+    );
+    if (trackingSector && trackingSector !== this.observer.currentSector) {
+      this.observer.currentSector = trackingSector;
+    }
+
     if (this.localUpdateHook) {
-      this.localUpdateHook(dt);
+      this.localUpdateHook(dt, Input);
     }
   }
 
-  /**
-   * Coordinates pure rasterization loops and context clears
-   */
   private render() {
-    // 1. Wipe the minimap view context clean every frame
     this.mapCtx.clearRect(0, 0, this.mapCanvas.width, this.mapCanvas.height);
 
-    // 2. Perform 3D projection column sweep and blit raw bytes onto the screen
     this.renderer3D.render(this.scene);
 
-    // 3. Render the top-down 2D radar view if configured active
     if (this.config.enableMinimap && this.mapCanvas.style.display !== "none") {
       this.renderMinimap();
     }
@@ -190,11 +187,9 @@ export default class ORCEngine {
 
     ctx.save();
 
-    // 1. Translate the viewport context to center on the player's position
     ctx.translate(canvasW / 2, canvasH / 2);
     ctx.translate(-obs.position.x, -obs.position.y);
 
-    // 2. Draw Sector Walls/Boundaries
     if (obs.currentSector) {
       for (const wall of obs.currentSector.boundaries) {
         ctx.beginPath();
@@ -211,11 +206,10 @@ export default class ORCEngine {
       }
     }
 
-    // 3. Draw Dynamic Wall-Bounded FOV Visibility Cone
     const fovAngleStart = obs.dirAngle - obs.fov / 2;
 
-    // Choose how dense you want the vision sweep (60-90 rays is clean and fast)
-    const rayCount = 60;
+    // how dense the vision sweep
+    const rayCount = 600;
     const angleStep = obs.fov / rayCount;
 
     ctx.beginPath();
@@ -301,7 +295,7 @@ export default class ORCEngine {
   /**
    * An exposed callback engine registry for custom gameplay loop interactions
    */
-  public onUpdate(callback: (dt: number) => void) {
+  public onUpdate(callback: (dt: number, input: typeof Input) => void) {
     this.localUpdateHook = callback;
   }
 

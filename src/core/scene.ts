@@ -31,44 +31,71 @@ export default class Scene {
   }
 
   castRay(currentRayAngle: number): RayHit | null {
-    const currentSector = this.observer.currentSector;
-    if (!currentSector) return null;
-
-    let rayHit: RayHit | null = null;
-    const rayStart = this.observer.position;
-
-    // Generate a unit direction vector for this specific column ray
+    if (!this.observer.currentSector) return null;
     const rayDir = Vector2.fromAngle(currentRayAngle);
 
+    let currentSector = this.observer.currentSector;
+    let ignoreWall: Boundary | undefined = undefined;
+    let safety = 0;
+
+    while (currentSector && safety < 10) {
+      safety++;
+      const hit = this.castRayInSector(
+        this.observer.position,
+        rayDir,
+        currentSector,
+        this.observer.viewDistance,
+        ignoreWall,
+      );
+      if (!hit) return null;
+
+      if (hit.boundary.isPortal && hit.boundary.targetSector) {
+        ignoreWall = hit.boundary;
+        currentSector = hit.boundary.targetSector;
+      } else {
+        return hit;
+      }
+    }
+    return null;
+  }
+
+  castRayInSector(
+    rayStart: Vector2D,
+    rayDir: Vector2D,
+    sector: Sector,
+    viewDistance: number,
+    ignoreBoundary?: Boundary,
+  ): RayHit | null {
     let closestHit: RayHit | null = null;
     let recordDistance = Infinity;
 
-    for (const wall of currentSector.boundaries) {
-      // Wall vector components: Line segment (A to B)
+    for (const wall of sector.boundaries) {
+      // Avoid hitting the back of the portal we just stepped through
+      if (
+        ignoreBoundary &&
+        (wall === ignoreBoundary || wall === ignoreBoundary.portalTo)
+      ) {
+        continue;
+      }
+
       const x1 = wall.start.x;
       const y1 = wall.start.y;
       const x2 = wall.end.x;
       const y2 = wall.end.y;
 
-      // Ray vector components: Ray origin (P) + Direction vector (D)
       const px = rayStart.x;
       const py = rayStart.y;
       const dx = rayDir.x;
       const dy = rayDir.y;
 
-      // Cramer's rule intersection formula determinant
       const denominator = (x1 - x2) * dy - (y1 - y2) * dx;
-      if (denominator === 0) continue; // Ray and wall run parallel
+      if (denominator === 0) continue;
 
-      // t = interpolation parameter along the wall line segment (0 <= t <= 1)
       const t = ((x1 - px) * dy - (y1 - py) * dx) / denominator;
-
-      // u = distance along the projected directional ray vector
       const u = ((x1 - x2) * (y1 - py) - (y1 - y2) * (x1 - px)) / denominator;
 
-      // Valid intersection occurs forward along the ray (u > 0) and within segment bounds
       if (t >= 0 && t <= 1 && u > 0) {
-        if (u > this.observer.viewDistance) continue; // Skip if beyond view distance
+        if (u > viewDistance) continue;
 
         if (u < recordDistance) {
           recordDistance = u;
@@ -79,19 +106,15 @@ export default class Scene {
 
           closestHit = {
             boundary: wall,
-            distance: u, // Store corrected distance for clean render proportions
+            distance: u,
             point: hitPoint,
-            u: wallLength === 0 ? 0 : hitOffset / wallLength, // Normalize texture coordinate mapping
+            u: wallLength === 0 ? 0 : hitOffset / wallLength,
           };
         }
       }
-
-      if (closestHit) {
-        rayHit = closestHit;
-      }
     }
 
-    return rayHit;
+    return closestHit;
   }
 
   getSectorAtPosition(point: Vector2D): Sector | null {

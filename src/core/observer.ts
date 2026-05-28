@@ -11,14 +11,18 @@ export default class Observer {
   currentSector?: Sector;
 
   // Public and fully configurable via engine scripts or power-ups
-  public viewDistance: number = 3000;
+  viewDistance: number = 3000;
+
+  pitch: number = 0;
+  protected lookUpDownSpeed: number = 400; // Pixels of shift per second
+  protected maxPitch: number = 300; // Maximum pixel shearing boundary limit
 
   // --- 3D Vertical Physics Variables ---
   z: number = 0;
-  height: number = 60;
+  height: number = 20;
   protected velocityZ: number = 0;
   protected stepHeight: number = 10;
-  protected jumpHeight: number = 320;
+  protected jumpHeight: number = 220;
   protected gravityForce: number = -300;
 
   protected speed: number = 80;
@@ -33,7 +37,7 @@ export default class Observer {
     this.dirVector = Vector2.fromAngle(toRadians(this.dirAngle));
   }
 
-  public lookAt(angle: DEGREES) {
+  lookAt(angle: DEGREES) {
     this.dirAngle = ((angle % 360) + 360) % 360;
     this.dirVector = Vector2.normalized(
       Vector2.fromAngle(toRadians(this.dirAngle)),
@@ -42,7 +46,7 @@ export default class Observer {
 
   // In src/core/observer.ts
 
-  public move(displacement: Vector2D): void {
+  move(displacement: Vector2D): void {
     if (displacement.x === 0 && displacement.y === 0) return;
 
     // Project where the observer wants to step on this frame tick
@@ -52,7 +56,7 @@ export default class Observer {
     this.position = this.checkCollision(this.position, intendedPosition);
   }
 
-  public checkCollision(currentPos: Vector2D, targetPos: Vector2D): Vector2D {
+  checkCollision(currentPos: Vector2D, targetPos: Vector2D): Vector2D {
     let outputVector: Vector2D = { ...targetPos };
     if (!this.currentSector) return outputVector;
 
@@ -93,8 +97,12 @@ export default class Observer {
     return outputVector;
   }
 
-  public handleInput(dt: number): void {
-    // --- 1. HANDLE CAMERA VIEW ROTATION ---
+  centerView(): void {
+    this.pitch = 0;
+  }
+
+  handleInput(dt: number): void {
+    // --- 1. HANDLE CAMERA VIEW ROTATION (YAW) ---
     if (Input.isHeld("ArrowLeft")) {
       this.dirAngle -= this.rotationSpeed * dt;
     }
@@ -103,17 +111,31 @@ export default class Observer {
     }
     this.lookAt(this.dirAngle);
 
-    // --- 2. CALCULATE INTENDED VECTOR VELOCITY ---
+    // --- 1B. HANDLE CAMERA LOOK UP AND DOWN (Y-SHEAR PITCH) ---
+    if (Input.isHeld("ArrowUp")) {
+      this.pitch += this.lookUpDownSpeed * dt;
+    }
+    if (Input.isHeld("ArrowDown")) {
+      this.pitch -= this.lookUpDownSpeed * dt;
+    }
+
+    // Clamp the pitch offset to prevent the world flipping upside down or wrapping awkwardly
+    this.pitch = Math.max(-this.maxPitch, Math.min(this.maxPitch, this.pitch));
+
+    if (Input.isPressed("KeyC")) {
+      this.centerView();
+    }
+
+    // --- 2. CALCULATE INTENDED VECTOR VELOCITY (WASD Controls mapped back to W/S) ---
     let moveVector = Vector2.createVector(0, 0);
 
-    if (Input.isHeld("ArrowUp") || Input.isHeld("KeyW")) {
+    // Using W and S exclusively for movement now that ArrowUp/Down handle looking vertically!
+    if (Input.isHeld("KeyW")) {
       moveVector = Vector2.add(moveVector, this.dirVector);
     }
-    if (Input.isHeld("ArrowDown") || Input.isHeld("KeyS")) {
+    if (Input.isHeld("KeyS")) {
       moveVector = Vector2.subtract(moveVector, this.dirVector);
     }
-
-    // Fixed Perpendicular Strafe Vector Maps
     if (Input.isHeld("KeyD")) {
       moveVector.x -= this.dirVector.y;
       moveVector.y += this.dirVector.x;
@@ -141,7 +163,7 @@ export default class Observer {
     }
   }
 
-  public update(dt: number) {
+  update(dt: number) {
     // 1. Process inputs and horizontal movement
     this.handleInput(dt);
 
