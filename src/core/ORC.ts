@@ -1,7 +1,7 @@
 import Observer from "./observer";
 import Scene from "./scene";
 import Renderer from "./renderer";
-import { Vector2, createCanvas, Input, toRadians } from "./utils";
+import { Vector2, createCanvas, Input, toRadians, toDegrees } from "./utils";
 import type { EngineConfig } from "./Types";
 
 export default class ORCEngine {
@@ -34,9 +34,6 @@ export default class ORCEngine {
     this.initSystems();
   }
 
-  /**
-   * Allocates the required canvas viewports directly inside the container layout
-   */
   private initDOM() {
     // 1. Core 3D Software Renderer Canvas Viewport
     const mainSetup = createCanvas(
@@ -63,9 +60,6 @@ export default class ORCEngine {
     this.mapCanvas.style.display = this.config.enableMinimap ? "block" : "none";
   }
 
-  /**
-   * Initializes and couples instances of your core simulation modules
-   */
   private initSystems() {
     // Center the observer tracking focus inside the minimap canvas bounds initially
     const startX = this.mapCanvas.width / 2;
@@ -74,13 +68,11 @@ export default class ORCEngine {
     // Instantiate your fully decoupled Observer
     this.observer = new Observer(
       Vector2.createVector(startX, startY),
-      60, // Field of view (Degrees)
+      toDegrees(Math.PI / 2),
     );
 
-    // Instantiate your single-ray Scene manager
     this.scene = new Scene(this.observer);
 
-    // Instantiate your 32-bit direct pixel buffer software renderer
     this.renderer3D = new Renderer(
       this.mainCtx,
       this.config.width,
@@ -123,9 +115,6 @@ export default class ORCEngine {
     requestAnimationFrame((timestamp) => this.loop(timestamp));
   }
 
-  /**
-   * Stops the engine heartbeat safely
-   */
   public stop() {
     this.isRunning = false;
   }
@@ -154,6 +143,7 @@ export default class ORCEngine {
   private update(dt: number) {
     this.observer.update(dt);
 
+    // Move player to new sector
     const trackingSector = this.scene.getSectorAtPosition(
       this.observer.position,
     );
@@ -196,6 +186,24 @@ export default class ORCEngine {
         if (wall.isPortal) {
           ctx.strokeStyle = "rgba(0, 150, 255, 0.5)"; // Translucent Blue Portal
           ctx.lineWidth = 1.5;
+
+          // Draw Target Sector
+          const targetSector = wall.targetSector;
+          if (targetSector) {
+            for (const targetSectorWall of targetSector.boundaries) {
+              ctx.beginPath();
+              if (targetSectorWall.isPortal) {
+                ctx.strokeStyle = "rgba(0, 150, 255, 0.5)";
+                ctx.lineWidth = 1.5;
+              } else {
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 2.5;
+              }
+              ctx.moveTo(targetSectorWall.start.x, targetSectorWall.start.y);
+              ctx.lineTo(targetSectorWall.end.x, targetSectorWall.end.y);
+              ctx.stroke();
+            }
+          }
         } else {
           ctx.strokeStyle = "#ffffff"; // Solid White Walls
           ctx.lineWidth = 2.5;
@@ -209,7 +217,7 @@ export default class ORCEngine {
     const fovAngleStart = obs.dirAngle - obs.fov / 2;
 
     // how dense the vision sweep
-    const rayCount = 600;
+    const rayCount = 60;
     const angleStep = obs.fov / rayCount;
 
     ctx.beginPath();
@@ -239,7 +247,7 @@ export default class ORCEngine {
     ctx.fillStyle = "rgba(0, 255, 204, 0.08)"; // Ultra-smooth faint green neon shadow cone
     ctx.fill();
 
-    // OPTIONAL: Draw the clean bounding framing wires for that classic vector radar look
+    // Draw the clean bounding framing wires for that classic vector radar look
     ctx.strokeStyle = "rgba(0, 255, 204, 0.25)";
     ctx.lineWidth = 1;
 

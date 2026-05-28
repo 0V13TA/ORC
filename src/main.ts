@@ -31,16 +31,16 @@ orc.onCreate(async (scene) => {
   const sectorGreatHall = scene.createSector(0, 140);
 
   // Sector B: The Flooded Colonnade (Low roof, slightly deep layout water floor)
-  const sectorColonnade = scene.createSector(-15, 80);
+  const sectorColonnade = scene.createSector(0, 80);
 
   // Sector C: The Elevated Guard Tower (Requires steps, tall panoramic view windows)
-  const sectorTower = scene.createSector(35, 180);
+  const sectorTower = scene.createSector(0, 180);
 
   // Sector D: The Shadow Corridor (Narrow connecting passage, highly claustrophobic)
   const sectorCorridor = scene.createSector(0, 75);
 
   // Sector E: The Lava Boiler Sacristy (Sunken fire pit deep in the facility)
-  const sectorBoiler = scene.createSector(-40, 110);
+  const sectorBoiler = scene.createSector(0, 110);
 
   // =========================================================================
   // --- 3. CONFIGURING MATERIALS ---
@@ -200,7 +200,7 @@ orc.onCreate(async (scene) => {
     position: Vector2.createVector(140, 180),
     z: 70, // Hanging midpoint vertically
     radius: 120,
-    intensity: 1.5,
+    intensity: 2.5,
     color: { r: 0, g: 255, b: 180 },
   });
 
@@ -230,7 +230,7 @@ orc.onCreate(async (scene) => {
     position: Vector2.createVector(400, 130),
     z: 100, // Elevated high in space matching sector configuration elevations
     radius: 140,
-    intensity: 1.8,
+    intensity: 2.8,
     color: { r: 255, g: 255, b: 240 },
   });
 

@@ -19,10 +19,10 @@ export default class Observer {
 
   // --- 3D Vertical Physics Variables ---
   z: number = 0;
-  height: number = 20;
+  height: number = 40;
   protected velocityZ: number = 0;
-  protected stepHeight: number = 10;
-  protected jumpHeight: number = 220;
+  protected stepHeight: number = 30;
+  protected jumpHeight: number = 120;
   protected gravityForce: number = -300;
 
   protected speed: number = 80;
