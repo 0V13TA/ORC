@@ -1,5 +1,5 @@
 import type { DEGREES, Sector, Vector2D } from "./Types";
-import { circleLineCollision, Input, toRadians, Vector2 } from "./utils";
+import { circleLineCollision, InputManager, toRadians, Vector2 } from "./utils";
 
 export default class Observer {
   fov: DEGREES;
@@ -17,21 +17,25 @@ export default class Observer {
   protected lookUpDownSpeed: number = 400; // Pixels of shift per second
   protected maxPitch: number = 300; // Maximum pixel shearing boundary limit
 
+  private input: InputManager;
+
   // --- 3D Vertical Physics Variables ---
   z: number = 0;
   height: number = 40;
   protected velocityZ: number = 0;
-  protected stepHeight: number = 30;
-  protected jumpHeight: number = 120;
+  protected stepHeight: number = 10;
+  protected jumpHeight: number = 220;
   protected gravityForce: number = -300;
 
   protected speed: number = 80;
   protected radius: number = 8;
   protected rotationSpeed: number = 140;
 
-  constructor(position: Vector2D, fov: DEGREES) {
+  constructor(position: Vector2D, fov: DEGREES, input: InputManager) {
     this.fov = fov;
     this.position = position;
+
+    this.input = input;
 
     this.dirAngle = 0;
     this.dirVector = Vector2.fromAngle(toRadians(this.dirAngle));
@@ -103,26 +107,26 @@ export default class Observer {
 
   handleInput(dt: number): void {
     // --- 1. HANDLE CAMERA VIEW ROTATION (YAW) ---
-    if (Input.isHeld("ArrowLeft")) {
+    if (this.input.isHeld("ArrowLeft")) {
       this.dirAngle -= this.rotationSpeed * dt;
     }
-    if (Input.isHeld("ArrowRight")) {
+    if (this.input.isHeld("ArrowRight")) {
       this.dirAngle += this.rotationSpeed * dt;
     }
     this.lookAt(this.dirAngle);
 
     // --- 1B. HANDLE CAMERA LOOK UP AND DOWN (Y-SHEAR PITCH) ---
-    if (Input.isHeld("ArrowUp")) {
+    if (this.input.isHeld("ArrowUp")) {
       this.pitch += this.lookUpDownSpeed * dt;
     }
-    if (Input.isHeld("ArrowDown")) {
+    if (this.input.isHeld("ArrowDown")) {
       this.pitch -= this.lookUpDownSpeed * dt;
     }
 
     // Clamp the pitch offset to prevent the world flipping upside down or wrapping awkwardly
     this.pitch = Math.max(-this.maxPitch, Math.min(this.maxPitch, this.pitch));
 
-    if (Input.isPressed("KeyC")) {
+    if (this.input.isPressed("KeyC")) {
       this.centerView();
     }
 
@@ -130,17 +134,17 @@ export default class Observer {
     let moveVector = Vector2.createVector(0, 0);
 
     // Using W and S exclusively for movement now that ArrowUp/Down handle looking vertically!
-    if (Input.isHeld("KeyW")) {
+    if (this.input.isHeld("KeyW")) {
       moveVector = Vector2.add(moveVector, this.dirVector);
     }
-    if (Input.isHeld("KeyS")) {
+    if (this.input.isHeld("KeyS")) {
       moveVector = Vector2.subtract(moveVector, this.dirVector);
     }
-    if (Input.isHeld("KeyD")) {
+    if (this.input.isHeld("KeyD")) {
       moveVector.x -= this.dirVector.y;
       moveVector.y += this.dirVector.x;
     }
-    if (Input.isHeld("KeyA")) {
+    if (this.input.isHeld("KeyA")) {
       moveVector.x += this.dirVector.y;
       moveVector.y -= this.dirVector.x;
     }
@@ -154,7 +158,7 @@ export default class Observer {
 
     // --- 4. HANDLE JUMP INPUT ---
     if (
-      Input.isPressed("Space") &&
+      this.input.isPressed("Space") &&
       this.currentSector &&
       this.z === this.currentSector.floorHeight
     ) {

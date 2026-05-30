@@ -27,12 +27,28 @@ export const RAD2DEG = 180 / Math.PI;
 export const toRadians = (x: DEGREES): RADIANS => x * DEG2RAD;
 export const toDegrees = (x: RADIANS): DEGREES => x * RAD2DEG;
 
-// --- Timer Manager ---
-export const TimerManager = {
-  timers: [] as Timer[],
-  counterId: 0,
+// =========================================================================
+// --- INSTANTIABLE TIME MANAGER (WITH SLOW-MO) ---
+// =========================================================================
+export class TimeManager {
+  private timers: Timer[] = [];
+  private counterId: number = 0;
 
-  add(interval: number, callback: () => void, repeat: boolean = true): number {
+  // 1.0 = Normal time flow, 0.5 = Half speed slow-motion, 0.0 = Paused
+  public timeScale: number = 1.0;
+
+  /**
+   * Sets the game's current simulation time speed multiplier
+   */
+  public setSlowMo(scale: number): void {
+    this.timeScale = Math.max(0, scale);
+  }
+
+  public add(
+    interval: number,
+    callback: () => void,
+    repeat: boolean = true,
+  ): number {
     const id = this.counterId++;
     this.timers.push({
       id,
@@ -43,18 +59,38 @@ export const TimerManager = {
       repeat,
     });
     return id;
-  },
+  }
 
-  setInterval(interval: number, callback: () => void): number {
+  public setInterval(interval: number, callback: () => void): number {
     return this.add(interval, callback, true);
-  },
+  }
 
-  update(dt: number): void {
+  public setTimeout(interval: number, callback: () => void): number {
+    return this.add(interval, callback, false);
+  }
+
+  public pauseTimer(id: number): void {
+    const timer = this.timers.find((t) => t.id === id);
+    if (timer) timer.paused = true;
+  }
+
+  public resumeTimer(id: number): void {
+    const timer = this.timers.find((t) => t.id === id);
+    if (timer) timer.paused = false;
+  }
+
+  /**
+   * Drives active clock tickers using the current slow-mo delta scalar
+   */
+  public update(dt: number): void {
+    // Apply time dilation multiplier directly onto incoming delta tick updates!
+    const scaledDt = dt * this.timeScale;
+
     for (let i = this.timers.length - 1; i >= 0; i--) {
       const t = this.timers[i];
       if (t.paused) continue;
 
-      t.elapsed += dt;
+      t.elapsed += scaledDt;
       if (t.elapsed >= t.interval) {
         t.callback();
         if (t.repeat) {
@@ -64,21 +100,44 @@ export const TimerManager = {
         }
       }
     }
-  },
+  }
 
-  clearAll(): void {
+  public clearAll(): void {
     this.timers = [];
     this.counterId = 0;
-  },
-};
+  }
+}
 
-// --- Input Handling ---
-export const Input = {
-  held: new Set<KeyCode>(),
-  pressed: new Set<KeyCode>(),
-  released: new Set<KeyCode>(),
+// =========================================================================
+// --- INSTANTIABLE INPUT MANAGER ---
+// =========================================================================
+export class InputManager {
+  // Instance-isolated tracking sets
+  private held = new Set<KeyCode>();
+  private pressed = new Set<KeyCode>();
+  private released = new Set<KeyCode>();
 
-  init(): void {
+  private mouseHeld = new Set<number>();
+  private mousePressed = new Set<number>();
+  private mouseReleased = new Set<number>();
+
+  private mousePosition: Vector2D = { x: 0, y: 0 };
+  private mouseDelta: Vector2D = { x: 0, y: 0 };
+  public isPointerLocked: boolean = false;
+
+  public activeTouches = new Map<
+    number,
+    { startX: number; startY: number; currentX: number; currentY: number }
+  >();
+  public touchMoveVector: Vector2D = { x: 0, y: 0 };
+  public touchLookDelta: Vector2D = { x: 0, y: 0 };
+
+  constructor(targetElement: HTMLElement = document.body) {
+    this.initListeners(targetElement);
+  }
+
+  private initListeners(targetElement: HTMLElement): void {
+    // Keyboard Event Hooks
     window.addEventListener("keydown", (e: KeyboardEvent) => {
       if (!this.held.has(e.code as KeyCode)) {
         this.pressed.add(e.code as KeyCode);
@@ -90,25 +149,155 @@ export const Input = {
       this.held.delete(e.code as KeyCode);
       this.released.add(e.code as KeyCode);
     });
-  },
 
-  isHeld(key: KeyCode): boolean {
+    // Mouse Click Event Hooks
+    targetElement.addEventListener("mousedown", (e: MouseEvent) => {
+      if (!this.mouseHeld.has(e.button)) {
+        this.mousePressed.add(e.button);
+      }
+      this.mouseHeld.add(e.button);
+
+      if (!this.isPointerLocked && targetElement.requestPointerLock) {
+        targetElement.requestPointerLock();
+      }
+    });
+
+    window.addEventListener("mouseup", (e: MouseEvent) => {
+      this.mouseHeld.delete(e.button);
+      this.mouseReleased.add(e.button);
+    });
+
+    window.addEventListener("mousemove", (e: MouseEvent) => {
+      this.mousePosition.x = e.clientX;
+      this.mousePosition.y = e.clientY;
+      this.mouseDelta.x += e.movementX || 0;
+      this.mouseDelta.y += e.movementY || 0;
+    });
+
+    document.addEventListener("pointerlockchange", () => {
+      this.isPointerLocked = document.pointerLockElement === targetElement;
+    });
+
+    // Mobile Multi-Touch Phone Hooks
+    targetElement.addEventListener(
+      "touchstart",
+      (e: TouchEvent) => {
+        e.preventDefault();
+        const rect = targetElement.getBoundingClientRect();
+
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          const x = touch.clientX - rect.left;
+          const y = touch.clientY - rect.top;
+          this.activeTouches.set(touch.identifier, {
+            startX: x,
+            startY: y,
+            currentX: x,
+            currentY: y,
+          });
+        }
+      },
+      { passive: false },
+    );
+
+    targetElement.addEventListener(
+      "touchmove",
+      (e: TouchEvent) => {
+        e.preventDefault();
+        const rect = targetElement.getBoundingClientRect();
+        const halfWidth = rect.width / 2;
+
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          const trackingNode = this.activeTouches.get(touch.identifier);
+
+          if (trackingNode) {
+            const newX = touch.clientX - rect.left;
+            const newY = touch.clientY - rect.top;
+
+            if (trackingNode.startX > halfWidth) {
+              this.touchLookDelta.x += newX - trackingNode.currentX;
+              this.touchLookDelta.y += newY - trackingNode.currentY;
+            }
+
+            trackingNode.currentX = newX;
+            trackingNode.currentY = newY;
+          }
+        }
+        this.updatePhoneJoystick(halfWidth);
+      },
+      { passive: false },
+    );
+
+    const handleTouchClose = (e: TouchEvent) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        this.activeTouches.delete(e.changedTouches[i].identifier);
+      }
+      const rect = targetElement.getBoundingClientRect();
+      this.updatePhoneJoystick(rect.width / 2);
+    };
+
+    targetElement.addEventListener("touchend", handleTouchClose);
+    targetElement.addEventListener("touchcancel", handleTouchClose);
+  }
+
+  private updatePhoneJoystick(halfWidth: number): void {
+    this.touchMoveVector.x = 0;
+    this.touchMoveVector.y = 0;
+
+    for (const [_id, trackingNode] of this.activeTouches.entries()) {
+      if (trackingNode.startX <= halfWidth) {
+        const dx = trackingNode.currentX - trackingNode.startX;
+        const dy = trackingNode.currentY - trackingNode.startY;
+        const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+
+        const maxRadius = 45;
+        const throttle = Math.min(1, distance / maxRadius);
+
+        this.touchMoveVector.x = (dx / distance) * throttle;
+        this.touchMoveVector.y = (dy / distance) * throttle;
+        break;
+      }
+    }
+  }
+
+  // Public Query Interfaces
+  public isHeld(key: KeyCode): boolean {
     return this.held.has(key);
-  },
-
-  isPressed(key: KeyCode): boolean {
+  }
+  public isPressed(key: KeyCode): boolean {
     return this.pressed.has(key);
-  },
-
-  isReleased(key: KeyCode): boolean {
+  }
+  public isReleased(key: KeyCode): boolean {
     return this.released.has(key);
-  },
+  }
+  public isMouseHeld(button: number = 0): boolean {
+    return this.mouseHeld.has(button);
+  }
+  public isMousePressed(button: number = 0): boolean {
+    return this.mousePressed.has(button);
+  }
+  public isMouseReleased(button: number = 0): boolean {
+    return this.mouseReleased.has(button);
+  }
+  public getMousePosition(): Vector2D {
+    return this.mousePosition;
+  }
+  public getMouseDelta(): Vector2D {
+    return this.mouseDelta;
+  }
 
-  endFrame(): void {
+  public endFrame(): void {
     this.pressed.clear();
     this.released.clear();
-  },
-};
+    this.mousePressed.clear();
+    this.mouseReleased.clear();
+    this.mouseDelta.x = 0;
+    this.mouseDelta.y = 0;
+    this.touchLookDelta.x = 0;
+    this.touchLookDelta.y = 0;
+  }
+}
 
 // --- Collision Logic ---
 export function checkCollisionBoxes(a: BoxEntity, b: BoxEntity): boolean {

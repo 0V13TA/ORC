@@ -1,7 +1,14 @@
 import Observer from "./observer";
 import Scene from "./scene";
 import Renderer from "./renderer";
-import { Vector2, createCanvas, Input, toRadians, toDegrees } from "./utils";
+import {
+  Vector2,
+  createCanvas,
+  toRadians,
+  toDegrees,
+  InputManager,
+  TimeManager,
+} from "./utils";
 import type { EngineConfig } from "./Types";
 
 export default class ORCEngine {
@@ -11,6 +18,9 @@ export default class ORCEngine {
 
   public mapCanvas!: HTMLCanvasElement;
   public mapCtx!: CanvasRenderingContext2D;
+
+  public timeManager!: TimeManager;
+  private input!: InputManager;
 
   // Core Subsystems
   public observer!: Observer;
@@ -23,7 +33,7 @@ export default class ORCEngine {
   private config: EngineConfig;
 
   // Optional Developer Update Hook
-  private localUpdateHook: ((dt: number, input: typeof Input) => void) | null =
+  private localUpdateHook: ((dt: number, input: InputManager) => void) | null =
     null;
   private localCreateHook: ((scene: Scene) => void | Promise<void>) | null =
     null;
@@ -61,6 +71,9 @@ export default class ORCEngine {
   }
 
   private initSystems() {
+    this.input = new InputManager(this.mainCanvas);
+    this.timeManager = new TimeManager();
+
     // Center the observer tracking focus inside the minimap canvas bounds initially
     const startX = this.mapCanvas.width / 2;
     const startY = this.mapCanvas.height / 2;
@@ -69,6 +82,7 @@ export default class ORCEngine {
     this.observer = new Observer(
       Vector2.createVector(startX, startY),
       toDegrees(Math.PI / 2),
+      this.input,
     );
 
     this.scene = new Scene(this.observer);
@@ -78,9 +92,6 @@ export default class ORCEngine {
       this.config.width,
       this.config.height,
     );
-
-    // Initialize global raw window input tracking listeners
-    Input.init();
   }
 
   /**
@@ -136,7 +147,7 @@ export default class ORCEngine {
     this.render();
 
     // Release key presses before restarting the tick cycle
-    Input.endFrame();
+    this.input.endFrame();
     requestAnimationFrame((timestamp) => this.loop(timestamp));
   }
 
@@ -152,7 +163,7 @@ export default class ORCEngine {
     }
 
     if (this.localUpdateHook) {
-      this.localUpdateHook(dt, Input);
+      this.localUpdateHook(dt, this.input);
     }
   }
 
@@ -303,7 +314,7 @@ export default class ORCEngine {
   /**
    * An exposed callback engine registry for custom gameplay loop interactions
    */
-  public onUpdate(callback: (dt: number, input: typeof Input) => void) {
+  public onUpdate(callback: (dt: number, input: InputManager) => void) {
     this.localUpdateHook = callback;
   }
 
