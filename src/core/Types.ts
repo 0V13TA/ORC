@@ -170,16 +170,15 @@ export type Boundary = {
   isPortal: boolean;
   targetSector?: Sector;
 
-  // NOTE: points to another boundary
-  // to portal to, if is portal is set
-  // but not portal to then it is simple
-  // a division between to Sectors
   portalTo?: Boundary;
 };
 
 export type Sector = {
   floorHeight: number; // Zero is normal level
   ceilingHeight: number;
+
+  floorMaterial?: Material;
+  ceilingMaterial?: Material;
 
   neighbours?: Sector[];
 
